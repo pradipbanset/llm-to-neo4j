@@ -50,10 +50,6 @@ def create_subtopic(tx, skill_name, subtopic_name):
         MERGE (s)-[:COVERS]->(t)
     """, skill_name=skill_name, subtopic_name=subtopic_name)
 
-
-
-
-
 client = genai.Client()  # Reads GEMINI_API_KEY automatically
 
 def gemini_predict(prompt: str) -> str:
@@ -70,8 +66,6 @@ def gemini_predict(prompt: str) -> str:
         print(f"Error calling Gemini API: {e}")
         return ""
 
-
-
 # Define system steps as nodes
 
 def process_input(state):
@@ -84,8 +78,6 @@ def process_input(state):
     )
     state["processed_text"] = gemini_predict(prompt)
     return state
-
-
 
 
 def extract_entities(state):
@@ -112,9 +104,6 @@ def extract_entities(state):
         state["entities"] = entities
 
     return state
-
-
-
 
 
 def map_to_graph(state):
@@ -170,7 +159,7 @@ def expand_graph(state):
         for tool in skills_tools.get("tools", []):
             session.write_transaction(create_tool, role, tool)
 
-    # ✅ ensure expanded always exists
+    # ensure expanded always exists
     state["expanded"] = {
         "skills": skills_tools.get("skills", []),
         "tools": skills_tools.get("tools", [])
