@@ -1,5 +1,4 @@
 from main import app, gemini_predict, driver, create_role, create_skill, create_tool
-from main import app
 import gradio as gr
 
 # Chat-style workflow function
@@ -13,22 +12,42 @@ def run_workflow(user_text, chat_history):
     }
 
     try:
-        # app.invoke may return a list, so handle that
-        final_state_list = app.invoke(inputs)
-        final_state = final_state_list[-1] if isinstance(final_state_list, list) else final_state_list
+        final_state = app.invoke(inputs)
 
         processed_text = final_state.get("processed_text", "")
         entities = final_state.get("entities", {})
         skills = final_state.get("expanded", {}).get("skills", [])
         tools = final_state.get("expanded", {}).get("tools", [])
 
+        # Format skills (handle dicts with subtopics)
+        skill_texts = []
+        for s in skills:
+            if isinstance(s, dict):
+                name = s.get("name", "")
+                subs = s.get("subtopics", [])
+                if subs:
+                    skill_texts.append(f"{name} → {', '.join(subs)}")
+                else:
+                    skill_texts.append(name)
+            else:
+                skill_texts.append(str(s))
+
+        # Format tools (handle dicts or strings)
+        tool_texts = []
+        for t in tools:
+            if isinstance(t, dict):
+                tool_texts.append(t.get("name", str(t)))
+            else:
+                tool_texts.append(str(t))
+
         assistant_reply = (
             f"**Task:** {processed_text}\n\n"
             f"**Role:** {entities.get('role')}\n"
             f"**Type:** {entities.get('type')}\n"
-            f"**Skills:** {', '.join(skills)}\n"
-            f"**Tools:** {', '.join(tools)}"
+            f"**Skills:** {', '.join(skill_texts)}\n"
+            f"**Tools:** {', '.join(tool_texts)}"
         )
+
     except Exception as e:
         assistant_reply = f"Error running workflow: {e}"
 
@@ -43,10 +62,13 @@ with gr.Blocks() as demo:
     user_input = gr.Textbox(placeholder="Type your career query here...")
     submit_btn = gr.Button("Send")
 
-    # On click or enter, run the workflow
     submit_btn.click(run_workflow, inputs=[user_input, chatbot], outputs=[chatbot, chatbot])
     user_input.submit(run_workflow, inputs=[user_input, chatbot], outputs=[chatbot, chatbot])
 
 # Launch Gradio
 if __name__ == "__main__":
     demo.launch(server_name="0.0.0.0", debug=True)
+
+
+
+

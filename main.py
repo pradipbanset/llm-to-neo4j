@@ -42,6 +42,16 @@ def create_tool(tx, role_name, tool_name):
     """, role_name=role_name, tool_name=tool_name)
 
 
+def create_subtopic(tx, skill_name, subtopic_name):
+    """Attach subtopics to skills, e.g. Math -> Linear Algebra"""
+    tx.run("""
+        MERGE (s:Skill {name: $skill_name})
+        MERGE (t:Topic {name: $subtopic_name})
+        MERGE (s)-[:COVERS]->(t)
+    """, skill_name=skill_name, subtopic_name=subtopic_name)
+
+
+
 
 
 client = genai.Client()  # Reads GEMINI_API_KEY automatically
@@ -122,8 +132,6 @@ def map_to_graph(state):
     return state
 
 
-
-
 def expand_graph(state):
     """Expand the graph only if a valid career role exists"""
     if state.get("skip_workflow"):
@@ -132,9 +140,12 @@ def expand_graph(state):
         return state
 
     role = state["entities"]["role"]
+
     prompt = (
         f"List 5 key skills and 3 tools required for the role: {role}. "
-        "Return valid JSON with keys 'skills' and 'tools'."
+        "For each skill, also provide 2-3 detailed subtopics. "
+        "Return valid JSON with structure: "
+        "{ 'skills': [{ 'name': 'Math', 'subtopics': ['Algebra','Probability'] }], 'tools': ['Python','Excel'] }"
     )
     response = gemini_predict(prompt)
 
@@ -143,18 +154,30 @@ def expand_graph(state):
         if cleaned_response.startswith("```json"):
             cleaned_response = cleaned_response.replace("```json", "").replace("```", "").strip()
         skills_tools = json.loads(cleaned_response)
+
+        # ✅ normalize if it's a list
+        if isinstance(skills_tools, list):
+            skills_tools = {"skills": skills_tools, "tools": []}
     except json.JSONDecodeError:
         skills_tools = {"skills": [], "tools": []}
 
     # Store in Neo4j
     with driver.session() as session:
         for skill in skills_tools.get("skills", []):
-            session.write_transaction(create_skill, role, skill)
+            session.write_transaction(create_skill, role, skill["name"])
+            for sub in skill.get("subtopics", []):
+                session.write_transaction(create_subtopic, skill["name"], sub)
         for tool in skills_tools.get("tools", []):
             session.write_transaction(create_tool, role, tool)
 
-    state["expanded"] = skills_tools
+    # ✅ ensure expanded always exists
+    state["expanded"] = {
+        "skills": skills_tools.get("skills", []),
+        "tools": skills_tools.get("tools", [])
+    }
+
     return state
+
 
 
 
@@ -186,22 +209,6 @@ workflow.add_edge("query_graph", END)
 app = workflow.compile()
 
 
-
-
-# if __name__ == "__main__":
-#     user_text = input("Enter your career query (e.g., 'I want to be a data engineer'): ")
-#     followup_question = input("Enter a follow-up question (e.g., 'What skills are required?'): ")
-
-#     inputs = {
-#         "user_text": user_text,
-#         "followup_question": followup_question
-#     }
-
-#     try:
-#         final_state = app.invoke(inputs)
-#         print("Final state:", final_state)
-#     except Exception as e:
-#         print(f"Error running workflow: {e}")
 
 
 if __name__ == "__main__":
