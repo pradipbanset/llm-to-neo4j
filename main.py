@@ -144,7 +144,7 @@ def expand_graph(state):
             cleaned_response = cleaned_response.replace("```json", "").replace("```", "").strip()
         skills_tools = json.loads(cleaned_response)
 
-        # ✅ normalize if it's a list
+        # normalize if it's a list
         if isinstance(skills_tools, list):
             skills_tools = {"skills": skills_tools, "tools": []}
     except json.JSONDecodeError:
